@@ -9,6 +9,8 @@ const cors = require('cors')
 const { getClientById, getUpdatedClientByDateRange, getBookingById, getBookingChange } = require('./controllers/relation')
 const app = express()
 require('dotenv').config();
+const cron = require('node-cron');
+
 
 const db = mysql.createConnection({
     host: 'localhost',
@@ -63,6 +65,7 @@ db.connect((error) => {
         CREATE TABLE IF NOT EXISTS updatetrack (
         id INT AUTO_INCREMENT PRIMARY KEY,
         booking_updated VARCHAR(255),
+        update_type VARCHAR(255),
         date_updated TIMESTAMP
         )
         `;
@@ -72,7 +75,9 @@ db.connect((error) => {
         name VARCHAR(255),
         email VARCHAR(255),
         password VARCHAR(255),
+        isVerified boolean,
         address VARCHAR(255),
+        role ENUM('admin', 'superuser', 'user') DEFAULT 'user',
         phone INT
         )
         `;
@@ -279,6 +284,45 @@ numbers.forEach(async ({ number }) => {
     }
 });
 
+const runUpdateJob = async () => {
+    try {
+
+        const lastRunDateTime = new Date();
+        const currentDateTime = new Date();
+        const range = {
+            from: lastRunDateTime.toISOString(),
+            to: currentDateTime.toISOString(),
+        };
+        const bookingChanges = await getBookingChange(range);
+
+        if (bookingChanges && bookingChanges.response && bookingChanges.response.changes) {
+            const changes = bookingChanges.response.changes;
+
+            for (const change of changes) {
+                insertBookingInfo(change.bookingInfo);
+                insertBookingElement(change.element, change.bookingInfo.id);
+            }
+
+            console.log(`${changes.length} booking changes processed.`);
+        } else {
+            console.log('No booking changes found.');
+        }
+
+        console.log('Update job completed successfully.');
+    } catch (error) {
+        console.error('Error in update job:', error);
+    }
+};
+
+
+cron.schedule('0 */6 * * *', async () => {
+    console.log('Running update job...');
+    await runUpdateJob();
+});
+
+
+
 app.listen(5000, () => {
     console.log('server running on port 5000');
+    runUpdateJob();
 })

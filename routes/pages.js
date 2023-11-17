@@ -1,15 +1,11 @@
 const express = require('express')
 const { check, validationResult } = require('express-validator')
-const Employee = require('../models/Employee')
 const nodemailer = require('nodemailer')
 const router = express.Router()
 const bcrypt = require('bcryptjs')
 const jwt = require('jsonwebtoken')
-const Mailgen = require('mailgen');
 const auth = require('../middleware/auth');
 const mysql = require('mysql')
-const randomstring = require('randomstring')
-const sendMail = require('./sendMail')
 
 const db = mysql.createConnection({
     host: 'localhost',
@@ -32,7 +28,7 @@ router.post('/register', [
     }
 
     try {
-        const { name, email, password, address, phone } = req.body;
+        const { name, email, password, address, phone, role } = req.body;
 
         db.query("SELECT email FROM users WHERE email= ?", [email], async (error, results) => {
             if (error) {
@@ -57,7 +53,7 @@ router.post('/register', [
                     secure: true,
                     auth: {
                         user: 'noreplyhuski@gmail.com',
-                        pass: 'ullj tlhq xbkh vpcw'
+                        pass: 'sopa ctfa dmep bewr'
                     }
                 });
 
@@ -75,14 +71,15 @@ router.post('/register', [
                         </div>
                     `
                 });
+                
 
                 res.status(200).json({ msg: "Please activate your account" });
             }
         });
 
     } catch (error) {
-        console.log(error.message);
-        res.status(500).send(error.message);
+        console.log("Error sending email:", error.message);
+        res.status(500).json({ msg: "Error sending email", error: error.message });
     }
 });
 
@@ -95,7 +92,7 @@ router.post('/activationemail', async (req, res) => {
         const { activation_token } = req.body;
         const user = jwt.verify(activation_token, "mysecrettoken");
 
-        const { name, email, password, phone, address } = user;
+        const { name, email, password, phone, address, role } = user;
 
         const hashedPassword = await bcrypt.hash(password, 10);
 
@@ -137,7 +134,7 @@ router.post('/login', [
 
     const { email, password } = req.body;
     try {
-        db.query("SELECT id, email, password FROM users WHERE email = ?", [email], async (error, results) => {
+        db.query("SELECT id, email,role, password FROM users WHERE email = ?", [email], async (error, results) => {
             if (error) {
                 console.log(error);
                 return res.status(500).json({ errors: [{ msg: "Server error" }] });
@@ -149,7 +146,8 @@ router.post('/login', [
 
             const payload = {
                 utilisateur: {
-                    id: results[0].id
+                    id: results[0].id,
+                    role: results[0].role
                 }
             };
 
@@ -158,7 +156,7 @@ router.post('/login', [
                     console.log(err.message);
                     return res.status(500).json({ errors: [{ msg: "Server error" }] });
                 }
-                res.json({ token });
+                res.json({ payload, token });
             });
 
         });
@@ -171,16 +169,6 @@ router.post('/login', [
 
 
 
-router.get('/profile', auth, async (req, res) => {
-    try {
-        const user = await Employee.findById(req.utilisateur.id).select('-password')
-        res.json(user)
-
-    } catch (error) {
-        res.status(500).json({ msg: error.message })
-
-    }
-})
 
 router.post('/logout', (req, res) => {
     res.cookie('token', "", { expires: new Date(0) });
@@ -188,31 +176,6 @@ router.post('/logout', (req, res) => {
 })
 
 
-router.put('/updateProfile', auth, async (req, res) => {
-    try {
-        const user = await User.findById(req.utilisateur.id)
-        if (user) {
-            user.name = req.body.name || user.name
-            user.phone = req.body.phone || user.phone
-            user.address = req.body.address || user.address
-
-            const updatedUser = await user.save()
-            res.status(200).json({
-                id: updatedUser.id,
-                name: updatedUser.name,
-                address: updatedUser.address,
-                phone: updatedUser.phone
-            })
-        }
-        else {
-            res.status(404).json({ msg: "user not found" })
-        }
-
-    } catch (error) {
-        res.status(500).json({ msg: "user not found " })
-
-    }
-})
 router.post('/forget-password', [
     check('email', 'Please include a valid email').isEmail(),
 ], async (req, res) => {
@@ -237,7 +200,7 @@ router.post('/forget-password', [
                 secure: true,
                 auth: {
                     user: 'noreplyhuski@gmail.com',
-                    pass: 'ullj tlhq xbkh vpcw'
+                    pass: 'sopa ctfa dmep bewr'
                 }
             });
 
@@ -360,6 +323,50 @@ router.get('/getAllBookings', (req, res) => {
     });
 });
 
+router.get('/allUsers', (req, res) => {
+    const sql = `SELECT * FROM users`;
+    db.query(sql, (err, results) => {
+        if (err) {
+            return res.status(500).json({ error: 'Database error' });
+        }
+        res.json({ users: results });
+    });
+})
 
+router.put('/updateUser/:userId', (req, res) => {
+    const userId = req.params.userId;
+    const updatedUserData = req.body;
+
+    const sql = 'UPDATE users SET ? WHERE id = ?';
+    db.query(sql, [updatedUserData, userId], (err, result) => {
+        if (err) {
+            console.error('Error updating user:', err);
+            return res.status(500).json({ error: 'Database error' });
+        }
+
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+        res.json({ message: 'User updated successfully' });
+    });
+});
+
+router.delete('/deleteUser/:userId', (req, res) => {
+    const userId = req.params.userId;
+
+    const sql = 'DELETE FROM users WHERE id = ?';
+    db.query(sql, [userId], (err, result) => {
+        if (err) {
+            console.error('Error deleting user:', err);
+            return res.status(500).json({ error: 'Database error' });
+        }
+
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        res.json({ message: 'User deleted successfully' });
+    });
+});
 
 module.exports = router;    
