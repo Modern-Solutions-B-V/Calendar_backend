@@ -4,7 +4,7 @@ const cron = require('cron');
 const { getBookingChange, getBookingById } = require('./relation');
 const { insertBookingInfo, insertBookingElement } = require('../config/bookingUtils')
 const fs = require('fs');
-const jsonData = JSON.parse(fs.readFileSync('./bakary.json'));
+const jsonData = JSON.parse(fs.readFileSync('./response.json'));
 
 const numbers = (jsonData.response.changes)
 
@@ -58,7 +58,7 @@ const job = new cron.CronJob('* * * * *', async () => {
         const lastRunDateTime = "2023-11-01T10:00:00";
         const currentDateTime = new Date();
 
-     
+
 
 
         const list = await getBookingChange({
