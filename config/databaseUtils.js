@@ -58,7 +58,7 @@ const connectToDatabase = () => {
             isVerified TINYINT(1) DEFAULT 0,
             address VARCHAR(255),
             role ENUM('admin', 'superuser', 'user') DEFAULT 'user',
-            phone INT
+            phone VARCHAR(255)
             )
             `;
             const addForeignKeysQueries = [
